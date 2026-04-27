@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DSP Performance Dashboard · OpenX</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #f9f9f8;
+    --surface: #ffffff;
+    --surface2: #f3f3f1;
+    --border: rgba(0,0,0,0.09);
+    --border-mid: rgba(0,0,0,0.14);
+    --text: #1a1a18;
+    --text2: #6b6b66;
+    --text3: #9b9b96;
+    --blue: #378ADD;
+    --blue-bg: rgba(55,138,221,0.08);
+    --teal: #1D9E75;
+    --teal-bg: rgba(29,158,117,0.08);
+    --purple: #7F77DD;
+    --purple-bg: rgba(127,119,221,0.08);
+    --amber: #BA7517;
+    --amber-bg: rgba(186,117,23,0.08);
+    --coral: #D85A30;
+    --coral-bg: rgba(216,90,48,0.08);
+    --up: #2d8a52;
+    --up-bg: #e6f4ec;
+    --dn: #b83232;
+    --dn-bg: #faeaea;
+    --warn-bg: #fffbeb;
+    --warn-border: #d97706;
+    --warn-text: #92400e;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141412;
+      --surface: #1e1e1b;
+      --surface2: #272724;
+      --border: rgba(255,255,255,0.08);
+      --border-mid: rgba(255,255,255,0.14);
+      --text: #e8e8e4;
+      --text2: #8a8a84;
+      --text3: #5a5a56;
+      --up: #4ade80;
+      --up-bg: rgba(74,222,128,0.12);
+      --dn: #f87171;
+      --dn-bg: rgba(248,113,113,0.12);
+      --warn-bg: rgba(217,119,6,0.12);
+      --warn-border: #d97706;
+      --warn-text: #fbbf24;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: -.01em;
+    text-transform: uppercase;
+  }
+  .divider { width: 1px; height: 18px; background: var(--border-mid); }
+  .header-title { font-size: 13px; color: var(--text2); font-weight: 400; }
+  .last-updated {
+    font-size: 11px;
+    color: var(--text3);
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+  }
+
+  /* ── Tab bar ── */
+  .tab-bar {
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    gap: 2px;
+  }
+  .tab {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 10px 16px;
+    cursor: pointer;
+    color: var(--text2);
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+    position: relative;
+    top: 0.5px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  /* ── Layout ── */
+  .main { max-width: 1140px; margin: 0 auto; padding: 28px 32px 60px; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── KPI row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+  }
+  .kpi-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+  .kpi-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1; margin-bottom: 6px; letter-spacing: -.02em; }
+  .kpi-delta { font-size: 11px; }
+  .kpi-delta.up { color: var(--up); }
+  .kpi-delta.dn { color: var(--dn); }
+  .kpi-delta.fl { color: var(--text3); }
+
+  /* ── Section label ── */
+  .sec {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin: 24px 0 10px;
+  }
+
+  /* ── Chart cards ── */
+  .chart-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .chart-title { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 10px; }
+  .chart-row { display: grid; grid-template-columns: 2.4fr 1fr; gap: 12px; margin-bottom: 12px; }
+  @media (max-width: 720px) { .chart-row { grid-template-columns: 1fr; } }
+
+  /* ── Legend ── */
+  .legend { display: flex; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .li { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text2); }
+  .ld { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .ld.dashed { background: transparent; border: 1.5px dashed; border-radius: 2px; }
+
+  /* ── Efficiency badge grid ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+    gap: 7px;
+    margin-bottom: 20px;
+  }
+  .mrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 9px 12px;
+  }
+  .mname { font-size: 11px; color: var(--text2); }
+  .mbadge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .mbadge.up { background: var(--up-bg); color: var(--up); }
+  .mbadge.dn { background: var(--dn-bg); color: var(--dn); }
+  .mbadge.fl { background: var(--surface2); color: var(--text3); }
+
+  /* ── Snapshot grid ── */
+  .snap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .snap-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 13px 14px;
+  }
+  .snap-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 8px;
+  }
+  .srow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .srow:last-child { border-bottom: none; }
+  .sname { font-size: 12px; color: var(--text); }
+  .sdelta { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+  .sdelta.up { background: var(--up-bg); color: var(--up); }
+  .sdelta.dn { background: var(--dn-bg); color: var(--dn); }
+
+  /* ── Notes card ── */
+  .notes-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 var(--r-md) var(--r-md) 0;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+  }
+  .notes-date { font-size: 10px; color: var(--text3); margin-bottom: 6px; }
+  .notes-body { font-size: 12px; color: var(--text2); line-height: 1.7; }
+
+  /* ── Warning bar ── */
+  .warn {
+    background: var(--warn-bg);
+    border: 0.5px solid var(--warn-border);
+    border-radius: var(--r-md);
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--warn-text);
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .warn-icon { flex-shrink: 0; margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <span class="logo">OpenX</span>
+    <div class="divider"></div>
+    <span class="header-title">DSP Performance Dashboard</span>
+  </div>
+  <span class="last-updated">Last updated: Apr 25, 2026 &nbsp;·&nbsp; Apr 26 pending</span>
+</header>
+
+<nav class="tab-bar">
+  <button class="tab active" onclick="switchTab('ttd', this)">The Trade Desk</button>
+  <button class="tab" onclick="switchTab('di', this)">DeepIntent</button>
+  <button class="tab" onclick="switchTab('eps', this)">Epsilon</button>
+</nav>
+
+<main class="main">
+
+  <!-- ══════════ TTD ══════════ -->
+  <div id="panel-ttd" class="panel active">
+
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Daily gross spend</div>
+        <div class="kpi-value">$879K</div>
+        <div class="kpi-delta dn">▼ 10% MoM start</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">OX revenue</div>
+        <div class="kpi-value">$104K</div>
+        <div class="kpi-delta dn">▼ 10% MoM</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">OX fee %</div>
+        <div class="kpi-value">11.78%</div>
+        <div class="kpi-delta up">▲ +1pt MoM</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Bid requests</div>
+        <div class="kpi-value">80.9B</div>
+        <div class="kpi-delta dn">▼ 7.5% WoW</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Bid rate</div>
+        <div class="kpi-value">3.17%</div>
+        <div class="kpi-delta up">▲ +2.2% WoW</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Win rate</div>
+        <div class="kpi-value">8.83%</div>
+        <div class="kpi-delta dn">▼ 18.4% WoW</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Spend / M imps</div>
+        <div class="kpi-value">$3,877</div>
+        <div class="kpi-delta dn">▼ 5.0% WoW</div>
+      </div>
+    </div>
+
+    <div class="sec">Revenue trendline — weekly gross spend vs OX revenue</div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="legend">
+          <span class="li"><span class="ld" style="background:var(--blue)"></span>Gross Spend ($M)</span>
+          <span class="li"><span class="ld" style="background:var(--teal)"></span>OX Revenue ($M) — dashed</span>
+        </div>
+        <div style="position:relative;height:210px">
+          <canvas id="spendChart" role="img" aria-label="Weekly gross spend and OX revenue Oct 2025 to Apr 2026"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Channel mix — last 30d</div>
+        <div style="position:relative;height:210px">
+          <canvas id="chanChart" role="img" aria-label="Channel spend breakdown TE 75% OE 17% PMP 7%"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">Bid requests — weekly average (billions)</div>
+    <div class="chart-card">
+      <div style="position:relative;height:155px">
+        <canvas id="reqChart" role="img" aria-label="Weekly average bid requests 68B to 82B over 28 weeks"></canvas>
+      </div>
+    </div>
+
+    <div class="sec">Efficiency KPIs — daily, last 60 days through Apr 25</div>
+    <div class="chart-card">
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:var(--purple)"></span>Bid rate %</span>
+        <span class="li"><span class="ld dashed" style="border-color:var(--coral)"></span>Win rate % (pub fill rate)</span>
+      </div>
+      <div style="position:relative;height:190px">
+        <canvas id="brwrChart" role="img" aria-label="Daily bid rate and win rate Feb 25 to Apr 25 2026. Win rate declined from 12% to 8.8%."></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:var(--amber)"></span>Spend per million impressions ($)</span>
+      </div>
+      <div style="position:relative;height:155px">
+        <canvas id="spmChart" role="img" aria-label="Daily spend per million impressions Feb to Apr 2026"></canvas>
+      </div>
+    </div>
+
+    <div class="sec">WoW efficiency snapshot — 4/1–4/5 vs 3/1–3/5</div>
+    <div class="metrics-grid">
+      <div class="mrow"><span class="mname">Bid requests sent</span><span class="mbadge dn">-7.5%</span></div>
+      <div class="mrow"><span class="mname">Throttle rate</span><span class="mbadge dn">+3.6%</span></div>
+      <div class="mrow"><span class="mname">Bid rate</span><span class="mbadge up">+2.2%</span></div>
+      <div class="mrow"><span class="mname">Bid responses</span><span class="mbadge dn">-5.3%</span></div>
+      <div class="mrow"><span class="mname">Imp rate</span><span class="mbadge dn">-8.6%</span></div>
+      <div class="mrow"><span class="mname">Impressions</span><span class="mbadge dn">-13.3%</span></div>
+      <div class="mrow"><span class="mname">Spend / million</span><span class="mbadge dn">-5.0%</span></div>
+      <div class="mrow"><span class="mname">Win rate</span><span class="mbadge dn">-18.4%</span></div>
+    </div>
+
+    <div class="sec">Buyer, publisher & format snapshot — MoM</div>
+    <div class="snap-grid">
+      <div class="snap-card">
+        <div class="snap-title">Channel (MoM)</div>
+        <div class="srow"><span class="sname">OE (Open Exchange)</span><span class="sdelta dn">-16%</span></div>
+        <div class="srow"><span class="sname">XP (Deals)</span><span class="sdelta dn">-8%</span></div>
+        <div class="srow"><span class="sname">PMP</span><span class="sdelta dn">-3%</span></div>
+        <div class="srow"><span class="sname">TE (Trading Engine)</span><span class="sdelta dn">-66%</span></div>
+        <div class="srow"><span class="sname">RTG</span><span class="sdelta dn">-43%</span></div>
+      </div>
+      <div class="snap-card">
+        <div class="snap-title">Top buyers (MoM)</div>
+        <div class="srow"><span class="sname">Procter & Gamble</span><span class="sdelta dn">-22%</span></div>
+        <div class="srow"><span class="sname">Hearts & Science</span><span class="sdelta up">+50%</span></div>
+        <div class="srow"><span class="sname">Publicis Groupe</span><span class="sdelta up">+76%</span></div>
+        <div class="srow"><span class="sname">iProspect</span><span class="sdelta dn">-49%</span></div>
+        <div class="srow"><span class="sname">PHD New York</span><span class="sdelta dn">-21%</span></div>
+      </div>
+      <div class="snap-card">
+        <div class="snap-title">Top publishers (MoM)</div>
+        <div class="srow"><span class="sname">Yahoo</span><span class="sdelta dn">-26%</span></div>
+        <div class="srow"><span class="sname">Microsoft</span><span class="sdelta up">+22%</span></div>
+        <div class="srow"><span class="sname">Fox News</span><span class="sdelta up">+27%</span></div>
+        <div class="srow"><span class="sname">Mediavine</span><span class="sdelta dn">-42%</span></div>
+        <div class="srow"><span class="sname">Samsung TV</span><span class="sdelta up">+36%</span></div>
+      </div>
+      <div class="snap-card">
+        <div class="snap-title">Format / region (MoM)</div>
+        <div class="srow"><span class="sname">Display</span><span class="sdelta dn">-10%</span></div>
+        <div class="srow"><span class="sname">OLV</span><span class="sdelta dn">-23%</span></div>
+        <div class="srow"><span class="sname">Native</span><span class="sdelta up">+5%</span></div>
+        <div class="srow"><span class="sname">US</span><span class="sdelta dn">-13%</span></div>
+        <div class="srow"><span class="sname">EMEA</span><span class="sdelta dn">-35%</span></div>
+      </div>
+    </div>
+
+    <div class="sec">Analyst notes</div>
+    <div class="notes-card">
+      <div class="notes-date">Week of 4/1/26 · 4/1–4/5 vs 3/1–3/5 MoM</div>
+      <div class="notes-body">TTD is showing a -10% MoM start to April. Demand is down across the board — XP (-8%), OE (-16%), TE (-66%). Win rate is the primary concern at -18.4% WoW, reducing bid competitiveness across all channels. Publicis Groupe S.A. is the largest single decliner (-22%), consistent with reports that Publicis is no longer recommending TTD following an independent audit dispute. Agency ecosystem risk is elevated: Omnicom has initiated a fee audit; WPP and Dentsu are rumored to be moving away from OpenPath. OE spend through OpenPath publishers should be monitored closely — XP deal spend may benefit structurally if holding companies shift supply path preference.</div>
+    </div>
+  </div>
+
+  <!-- ══════════ DeepIntent ══════════ -->
+  <div id="panel-di" class="panel">
+    <div class="warn">
+      <span class="warn-icon">⚠</span>
+      <span>Time-series data for DeepIntent is not in the FLOWS file — only TTD is tracked there. Trendline charts are unavailable until a DeepIntent sheet is added. Snapshot deltas from the weekly notes file are shown below.</span>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">Gross spend (MoM)</div><div class="kpi-value">-3.0%</div><div class="kpi-delta dn">4/1–4/5 vs 3/1–3/5</div></div>
+      <div class="kpi"><div class="kpi-label">OX fee % (MoM)</div><div class="kpi-value">+8.4%</div><div class="kpi-delta up">▲ MoM</div></div>
+      <div class="kpi"><div class="kpi-label">OX revenue (MoM)</div><div class="kpi-value">+5.0%</div><div class="kpi-delta up">▲ MoM</div></div>
+      <div class="kpi"><div class="kpi-label">Bid rate WoW</div><div class="kpi-value">+29%</div><div class="kpi-delta up">▲ WoW · +69% MoM</div></div>
+      <div class="kpi"><div class="kpi-label">Impressions</div><div class="kpi-value">+6%</div><div class="kpi-delta up">▲ WoW · +21% MoM</div></div>
+      <div class="kpi"><div class="kpi-label">Win rate</div><div class="kpi-value">-5%</div><div class="kpi-delta dn">▼ WoW · -18% MoM</div></div>
+    </div>
+
+    <div class="sec">Efficiency metrics — WoW & MoM deltas</div>
+    <div class="metrics-grid">
+      <div class="mrow"><span class="mname">Bid requests (agg) WoW</span><span class="mbadge dn">-1.9%</span></div>
+      <div class="mrow"><span class="mname">Bids WoW</span><span class="mbadge up">+4.6%</span></div>
+      <div class="mrow"><span class="mname">Bids – OE WoW</span><span class="mbadge up">+2.5%</span></div>
+      <div class="mrow"><span class="mname">Bids – PD WoW</span><span class="mbadge up">+11.4%</span></div>
+      <div class="mrow"><span class="mname">Bid rate WoW</span><span class="mbadge up">+29%</span></div>
+      <div class="mrow"><span class="mname">Bid rate MoM</span><span class="mbadge up">+69%</span></div>
+      <div class="mrow"><span class="mname">Impressions WoW</span><span class="mbadge up">+6%</span></div>
+      <div class="mrow"><span class="mname">Impressions MoM</span><span class="mbadge up">+21%</span></div>
+      <div class="mrow"><span class="mname">RPM (agg) WoW</span><span class="mbadge dn">-16%</span></div>
+      <div class="mrow"><span class="mname">RPM – OE WoW</span><span class="mbadge dn">-28.6%</span></div>
+      <div class="mrow"><span class="mname">Win rate (agg) WoW</span><span class="mbadge dn">-5%</span></div>
+      <div class="mrow"><span class="mname">Win rate – OE WoW</span><span class="mbadge up">+1%</span></div>
+    </div>
+
+    <div class="sec">Buyer & publisher snapshot — MoM</div>
+    <div class="snap-grid">
+      <div class="snap-card">
+        <div class="snap-title">Top buyers</div>
+        <div class="srow"><span class="sname">AbbVie Inc.</span><span class="sdelta up">+18.5%</span></div>
+        <div class="srow"><span class="sname">Pfizer</span><span class="sdelta dn">-45.1%</span></div>
+        <div class="srow"><span class="sname">Orion Worldwide</span><span class="sdelta dn">-35.2%</span></div>
+        <div class="srow"><span class="sname">Havas Media Network</span><span class="sdelta dn">-60.4%</span></div>
+        <div class="srow"><span class="sname">Publicis Health Media</span><span class="sdelta up">+47.6%</span></div>
+      </div>
+      <div class="snap-card">
+        <div class="snap-title">Top publishers</div>
+        <div class="srow"><span class="sname">Raptive</span><span class="sdelta up">+11.3%</span></div>
+        <div class="srow"><span class="sname">Epsilon Core PX</span><span class="sdelta dn">-28.2%</span></div>
+        <div class="srow"><span class="sname">Risecodes</span><span class="sdelta up">+45.8%</span></div>
+        <div class="srow"><span class="sname">Media.net</span><span class="sdelta dn">-15.2%</span></div>
+        <div class="srow"><span class="sname">Vidazoo</span><span class="sdelta dn">-42.1%</span></div>
+      </div>
+    </div>
+
+    <div class="sec">Analyst notes</div>
+    <div class="notes-card">
+      <div class="notes-date">Week of 4/1/26 · 4/1–4/5 vs 3/1–3/5 · DeepIntent</div>
+      <div class="notes-body">DeepIntent has started Q2 slower than expected, driven by supply quality interventions tied to elevated HUMAN IVT rates (~9% by late March). Publisher blocks (5–6 per affected segment) were implemented immediately in coordination with DeepIntent, normalizing IVT rates. Spend patterns are cyclical — quarter resets are typical with mid-month recovery. End-of-quarter over-delivery in March created a tougher Q2 baseline. A HUMAN IVT vendor integration is being explored for structural protection going forward.</div>
+    </div>
+  </div>
+
+  <!-- ══════════ Epsilon ══════════ -->
+  <div id="panel-eps" class="panel">
+    <div class="warn">
+      <span class="warn-icon">⚠</span>
+      <span>Time-series data for Epsilon is not in the FLOWS file — only TTD is tracked there. Trendline charts are unavailable until an Epsilon sheet is added. Snapshot deltas from the weekly notes file are shown below.</span>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-label">Gross spend (MoM)</div><div class="kpi-value">-28%</div><div class="kpi-delta dn">4/1–4/5 vs 3/1–3/5</div></div>
+      <div class="kpi"><div class="kpi-label">OX fee % (MoM)</div><div class="kpi-value">-12%</div><div class="kpi-delta dn">▼ MoM</div></div>
+      <div class="kpi"><div class="kpi-label">OX revenue (MoM)</div><div class="kpi-value">-36%</div><div class="kpi-delta dn">▼ MoM</div></div>
+      <div class="kpi"><div class="kpi-label">OE channel (MoM)</div><div class="kpi-value">+24%</div><div class="kpi-delta up">▲ positive shift</div></div>
+      <div class="kpi"><div class="kpi-label">XP channel (MoM)</div><div class="kpi-value">-29%</div><div class="kpi-delta dn">▼ MoM</div></div>
+      <div class="kpi"><div class="kpi-label">Win rate</div><div class="kpi-value">-13%</div><div class="kpi-delta dn">▼ WoW · -7% MoM</div></div>
+    </div>
+
+    <div class="sec">Efficiency metrics — WoW & MoM deltas</div>
+    <div class="metrics-grid">
+      <div class="mrow"><span class="mname">Bid requests WoW</span><span class="mbadge fl">-1% / Flat MoM</span></div>
+      <div class="mrow"><span class="mname">Bids WoW</span><span class="mbadge dn">-6%</span></div>
+      <div class="mrow"><span class="mname">Bids – OE WoW</span><span class="mbadge dn">-6%</span></div>
+      <div class="mrow"><span class="mname">Bid rate WoW</span><span class="mbadge dn">-3%</span></div>
+      <div class="mrow"><span class="mname">Bid rate – OE WoW</span><span class="mbadge dn">-14%</span></div>
+      <div class="mrow"><span class="mname">Impressions WoW</span><span class="mbadge dn">-17%</span></div>
+      <div class="mrow"><span class="mname">Impressions – OE WoW</span><span class="mbadge dn">-11%</span></div>
+      <div class="mrow"><span class="mname">RPM – OE WoW</span><span class="mbadge up">+210%</span></div>
+      <div class="mrow"><span class="mname">Win rate (agg) WoW</span><span class="mbadge dn">-13%</span></div>
+      <div class="mrow"><span class="mname">Win rate – OE WoW</span><span class="mbadge up">+7%</span></div>
+      <div class="mrow"><span class="mname">Win rate – PD WoW</span><span class="mbadge dn">-12%</span></div>
+    </div>
+
+    <div class="sec">Analyst notes</div>
+    <div class="notes-card">
+      <div class="notes-date">Week of 4/1/26 · 4/1–4/5 vs 3/1–3/5 · Epsilon</div>
+      <div class="notes-body">Epsilon has started Q2 on the slower side, consistent with typical seasonal softness — ramp usually accelerates mid-quarter. A positive shift: OE spend is picking up (+24% MoM), aligned with our push for more open exchange participation given stronger OpenX economics. Deal spend is down, driven by softness from Wendy's and Walgreens. Epsilon maintains a high bid rate but low CPMs, limiting CTV competitiveness. QBR focus: bid guidance, bid density, Project Beacon (QPS efficiency + addressability), and Dynamic QPS to resolve primetime pipe constraints.</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+const gc = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+const tc = dark ? '#6b6b66' : '#9b9b96';
+
+const axOpts = (ytick, extra = {}) => ({
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+  scales: {
+    x: { grid: { color: gc }, ticks: { color: tc, font: { size: 9 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 13 } },
+    y: { grid: { color: gc }, ticks: { color: tc, font: { size: 9 }, callback: ytick } },
+    ...extra
+  }
+});
+
+const wkL = ['10/13','10/20','10/27','11/3','11/10','11/17','11/24','12/1','12/8','12/15','12/22','12/29','1/5','1/12','1/19','1/26','2/2','2/9','2/16','2/23','3/2','3/9','3/16','3/23','3/30','4/6','4/13','4/20'];
+const spD = [6433251,6581496,5587324,6031135,6496228,6242493,6776890,6099132,6774137,6824644,5665416,3194942,3977872,4995227,5571499,6044201,4964328,5788663,5555699,5677475,5218730,5735415,5665352,5631701,4467025,4968581,5595056,5254446].map(v=>+(v/1e6).toFixed(2));
+const oxD = [661663,670483,577573,658938,711874,689411,742013,694469,761827,762615,591655,343796,432583,525496,586165,652147,544319,602962,587039,620804,579859,625117,615440,623729,499836,544403,618100,605220].map(v=>+(v/1e6).toFixed(3));
+const rqD = [71.3,68.6,68.8,72.6,73.9,74.3,76.6,75.7,75.5,75.2,77.7,80.7,75.2,75.7,80.6,81.1,78.6,76.0,79.0,80.6,82.5,79.2,80.0,79.7,78.2,76.2,74.4,79.0];
+
+new Chart(document.getElementById('spendChart'), {
+  type: 'line',
+  data: { labels: wkL, datasets: [
+    { label: 'Gross Spend ($M)', data: spD, borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.07)', borderWidth: 2, pointRadius: 2, fill: true, tension: .3 },
+    { label: 'OX Revenue ($M)',  data: oxD, borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.07)', borderWidth: 2, pointRadius: 2, fill: true, tension: .3, borderDash: [5,3] }
+  ]},
+  options: axOpts(v => '$' + v + 'M')
+});
+
+new Chart(document.getElementById('chanChart'), {
+  type: 'doughnut',
+  data: { labels: ['TE', 'OE', 'PMP'], datasets: [{ data: [17.8, 4.1, 1.7], backgroundColor: ['#378ADD','#1D9E75','#7F77DD'], borderWidth: 0 }] },
+  options: { responsive: true, maintainAspectRatio: false, cutout: '60%',
+    plugins: { legend: { display: true, position: 'bottom', labels: { color: tc, font: { size: 11 }, boxWidth: 10, padding: 10 } },
+    tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': $' + ctx.raw + 'M' } } } }
+});
+
+new Chart(document.getElementById('reqChart'), {
+  type: 'bar',
+  data: { labels: wkL, datasets: [{ label: 'Bid Requests', data: rqD, backgroundColor: 'rgba(55,138,221,0.2)', borderColor: '#378ADD', borderWidth: 1 }] },
+  options: axOpts(v => v + 'B')
+});
+
+const dL = ['2/25','2/26','2/27','2/28','3/1','3/2','3/3','3/4','3/5','3/6','3/7','3/8','3/9','3/10','3/11','3/12','3/13','3/14','3/15','3/16','3/17','3/18','3/19','3/20','3/21','3/22','3/23','3/24','3/25','3/26','3/27','3/28','3/29','3/30','3/31','4/1','4/2','4/3','4/4','4/5','4/6','4/7','4/8','4/9','4/10','4/11','4/12','4/13','4/14','4/15','4/16','4/17','4/18','4/19','4/20','4/21','4/22','4/23','4/24','4/25'];
+const brA = [2.312,2.546,2.624,2.403,1.782,2.064,2.381,2.592,2.672,2.346,2.324,2.287,2.585,2.930,3.096,3.070,2.967,2.850,2.553,2.537,2.964,3.126,2.853,2.724,2.638,2.529,2.599,2.756,2.653,2.767,2.769,2.402,2.097,2.112,2.045,2.098,2.385,2.487,2.419,2.358,2.537,2.602,2.493,2.406,2.543,2.542,2.377,2.560,2.542,2.568,3.249,2.431,2.243,2.128,2.373,3.243,3.516,3.633,3.300,3.172];
+const wrA = [11.263,11.122,11.134,10.423,12.105,11.730,10.817,10.241,10.449,11.376,12.192,11.809,11.528,10.694,10.504,10.316,9.696,9.552,10.065,10.607,9.867,9.785,9.677,9.769,9.253,9.532,9.599,9.445,9.491,9.446,9.602,10.118,10.998,11.247,10.374,10.396,9.914,9.550,9.762,10.262,10.461,10.722,10.464,10.665,10.138,9.672,10.188,11.244,11.555,11.493,10.001,11.511,11.224,11.841,11.629,9.863,9.621,9.438,9.420,8.831];
+
+new Chart(document.getElementById('brwrChart'), {
+  type: 'line',
+  data: { labels: dL, datasets: [
+    { label: 'Bid Rate', data: brA, borderColor: '#7F77DD', backgroundColor: 'rgba(127,119,221,0.07)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: .25, yAxisID: 'y' },
+    { label: 'Win Rate', data: wrA, borderColor: '#D85A30', backgroundColor: 'rgba(216,90,48,0.07)', borderWidth: 1.5, pointRadius: 0, fill: false, tension: .25, borderDash: [5,3], yAxisID: 'y2' }
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+    scales: {
+      x: { grid: { color: gc }, ticks: { color: tc, font: { size: 9 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 12 } },
+      y:  { grid: { color: gc }, ticks: { color: tc, font: { size: 9 }, callback: v => v.toFixed(1) + '%' }, title: { display: true, text: 'Bid rate', color: '#7F77DD', font: { size: 9 } } },
+      y2: { position: 'right', grid: { display: false }, ticks: { color: '#D85A30', font: { size: 9 }, callback: v => v.toFixed(1) + '%' }, title: { display: true, text: 'Win rate', color: '#D85A30', font: { size: 9 } } }
+    }
+  }
+});
+
+const spmA = [3893,3965,3896,4122,3611,3387,3228,3154,3306,3470,3492,3494,3444,3327,3262,3395,3588,3797,3791,3556,3522,3386,3624,3904,4187,4142,3921,3754,3815,4132,4091,4231,4149,3862,3526,3229,3255,3541,3630,3617,3659,3460,3648,3529,3624,3689,3644,3564,3616,3699,3614,3976,4166,4030,3647,3420,3408,3402,3679,3877];
+
+new Chart(document.getElementById('spmChart'), {
+  type: 'line',
+  data: { labels: dL, datasets: [{ label: 'Spend/M', data: spmA, borderColor: '#BA7517', backgroundColor: 'rgba(186,117,23,0.07)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: .3 }] },
+  options: axOpts(v => '$' + v.toLocaleString())
+});
+</script>
+</body>
+</html>
